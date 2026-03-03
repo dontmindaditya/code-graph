@@ -3,10 +3,11 @@
   "description": "Persistent incremental knowledge graph for token-efficient, context-aware code reviews with Claude Code",
   "version": "1.6.2",
   "author": {
-    "name": "Tirth"
+    "name": "Tirth Kanani",
+    "url": "https://github.com/tirth8205"
   },
+  "homepage": "https://github.com/tirth8205/code-review-graph",
   "repository": "https://github.com/tirth8205/code-review-graph",
   "license": "MIT",
-  "tags": ["code-review", "knowledge-graph", "incremental", "tree-sitter"],
-  "skills": "../skills/"
+  "keywords": ["code-review", "knowledge-graph", "incremental", "tree-sitter", "mcp", "claude-code"]
 }
