@@ -408,7 +408,7 @@ def apply_refactor(
             lines = content.splitlines(keepends=True)
             idx = target_line - 1  # 0-indexed
             if 0 <= idx < len(lines) and old_text in lines[idx]:
-                lines[idx] = lines[idx].replace(old_text, new_text, 1)
+                lines[idx] = lines[idx].replace(old_text, new_text)
                 new_content = "".join(lines)
             else:
                 # Fall back to first-occurrence replacement if line doesn't match.
