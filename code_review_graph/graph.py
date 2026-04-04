@@ -161,9 +161,13 @@ class GraphStore:
         self._conn.commit()
 
     def _invalidate_cache(self) -> None:
-        """Invalidate the cached NetworkX graph after write operations."""
+        """Invalidate all caches after write operations."""
         with self._cache_lock:
             self._nxg_cache = None
+            self._cache_version += 1
+            self._node_cache.clear()
+            self._nodes_by_file_cache.clear()
+            self._stats_cache = None
 
     def close(self) -> None:
         self._conn.close()
@@ -271,16 +275,38 @@ class GraphStore:
     # --- Read operations ---
 
     def get_node(self, qualified_name: str) -> Optional[GraphNode]:
+        current_version = self._cache_version
+        cached = self._node_cache.get(qualified_name)
+        if cached is not None and cached[0] == current_version:
+            return cached[1]
+
         row = self._conn.execute(
             "SELECT * FROM nodes WHERE qualified_name = ?", (qualified_name,)
         ).fetchone()
-        return self._row_to_node(row) if row else None
+        result = self._row_to_node(row) if row else None
+
+        with self._cache_lock:
+            if len(self._node_cache) >= self._max_cache_size:
+                self._node_cache.pop(next(iter(self._node_cache)))
+            self._node_cache[qualified_name] = (current_version, result)
+        return result
 
     def get_nodes_by_file(self, file_path: str) -> list[GraphNode]:
+        current_version = self._cache_version
+        cached = self._nodes_by_file_cache.get(file_path)
+        if cached is not None and cached[0] == current_version:
+            return cached[1]
+
         rows = self._conn.execute(
             "SELECT * FROM nodes WHERE file_path = ?", (file_path,)
         ).fetchall()
-        return [self._row_to_node(r) for r in rows]
+        result = [self._row_to_node(r) for r in rows]
+
+        with self._cache_lock:
+            if len(self._nodes_by_file_cache) >= self._max_cache_size:
+                self._nodes_by_file_cache.pop(next(iter(self._nodes_by_file_cache)))
+            self._nodes_by_file_cache[file_path] = (current_version, result)
+        return result
 
     def get_edges_by_source(self, qualified_name: str) -> list[GraphEdge]:
         rows = self._conn.execute(
