@@ -386,7 +386,7 @@ def hybrid_search(
             "language": row["language"] or "",
             "params": row["params"],
             "return_type": row["return_type"],
-            "signature": row["signature"] if "signature" in row.keys() else None,
+            "signature": row["signature"] if "signature" in row else None,
             "score": round(final_score, 6),
         })
 
