@@ -368,7 +368,7 @@ def incremental_update(
             # Convert back to relative path if needed
             try:
                 dependent_files.add(str(Path(d).relative_to(repo_root)))
-            except ValueError:
+            except ValueError:  # Path.relative_to() raises this when path isn't relative to repo_root
                 dependent_files.add(d)
 
     # Combine changed + dependent
