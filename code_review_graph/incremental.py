@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
@@ -20,6 +21,9 @@ from .graph import GraphStore
 from .parser import CodeParser
 
 logger = logging.getLogger(__name__)
+
+# Number of parallel workers for file parsing (I/O-bound, so CPU count is fine)
+MAX_PARSE_WORKERS = min(32, (os.cpu_count() or 4) + 4)
 
 # Default ignore patterns (in addition to .gitignore)
 DEFAULT_IGNORE_PATTERNS = [
@@ -287,7 +291,7 @@ def find_dependents(store: GraphStore, file_path: str) -> list[str]:
 
 
 def full_build(repo_root: Path, store: GraphStore) -> dict:
-    """Full rebuild of the entire graph."""
+    """Full rebuild of the entire graph using parallel parsing."""
     parser = CodeParser()
     files = collect_all_files(repo_root)
 
@@ -297,27 +301,50 @@ def full_build(repo_root: Path, store: GraphStore) -> dict:
     for stale in existing_files - current_abs:
         store.remove_file_data(stale)
 
-    total_nodes = 0
-    total_edges = 0
-    errors = []
     file_count = len(files)
+    completed = 0
 
-    for i, rel_path in enumerate(files, 1):
+    def parse_file(rel_path: Path) -> tuple[str, int, int, str | None, str | None]:
+        """Parse a single file and return (path, nodes, edges, fhash, error)."""
         full_path = repo_root / rel_path
         try:
             source = full_path.read_bytes()
             fhash = hashlib.sha256(source).hexdigest()
             nodes, edges = parser.parse_bytes(full_path, source)
-            store.store_file_nodes_edges(str(full_path), nodes, edges, fhash)
-            total_nodes += len(nodes)
-            total_edges += len(edges)
+            return (str(full_path), len(nodes), len(edges), fhash, None)
         except (OSError, PermissionError) as e:
-            errors.append({"file": rel_path, "error": str(e)})
+            return (str(full_path), 0, 0, None, str(e))
         except Exception as e:
             logger.warning("Error parsing %s: %s", rel_path, e)
-            errors.append({"file": rel_path, "error": str(e)})
-        if i % 50 == 0 or i == file_count:
-            logger.info("Progress: %d/%d files parsed", i, file_count)
+            return (str(full_path), 0, 0, None, str(e))
+
+    total_nodes = 0
+    total_edges = 0
+    errors = []
+    stored_files: list[tuple[str, list, list, str]] = []
+
+    with ThreadPoolExecutor(max_workers=MAX_PARSE_WORKERS) as executor:
+        futures = {executor.submit(parse_file, f): f for f in files}
+        for future in as_completed(futures):
+            completed += 1
+            full_path, nodes_count, edges_count, fhash, error = future.result()
+            if error:
+                rel_path = str(Path(full_path).relative_to(repo_root))
+                errors.append({"file": rel_path, "error": error})
+            else:
+                total_nodes += nodes_count
+                total_edges += edges_count
+                try:
+                    source = Path(full_path).read_bytes()
+                    nodes, edges = parser.parse_bytes(Path(full_path), source)
+                    stored_files.append((full_path, nodes, edges, fhash))
+                except Exception:
+                    pass
+            if completed % 50 == 0 or completed == file_count:
+                logger.info("Progress: %d/%d files parsed", completed, file_count)
+
+    for full_path, nodes, edges, fhash in stored_files:
+        store.store_file_nodes_edges(full_path, nodes, edges, fhash)
 
     store.set_metadata("last_updated", time.strftime("%Y-%m-%dT%H:%M:%S"))
     store.set_metadata("last_build_type", "full")
