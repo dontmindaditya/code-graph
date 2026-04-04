@@ -149,6 +149,7 @@ class GraphStore:
         self._nodes_by_file_cache: dict[str, tuple[int, list[GraphNode]]] = {}
         self._stats_cache: tuple[int, GraphStats | None] | None = None
         self._max_cache_size = DEFAULT_CACHE_SIZE
+        self._stmt_cache: dict[str, sqlite3.Cursor] = {}
 
     def __enter__(self) -> "GraphStore":
         return self
@@ -168,6 +169,14 @@ class GraphStore:
             self._node_cache.clear()
             self._nodes_by_file_cache.clear()
             self._stats_cache = None
+            # Clear prepared statements (schema may have changed)
+            self._stmt_cache.clear()
+
+    def _get_stmt(self, sql: str) -> sqlite3.Cursor:
+        """Get or create a prepared statement cursor for the given SQL."""
+        if sql not in self._stmt_cache:
+            self._stmt_cache[sql] = self._conn.cursor()
+        return self._stmt_cache[sql]
 
     def close(self) -> None:
         self._conn.close()
@@ -203,9 +212,8 @@ class GraphStore:
                 extra, now,
             ),
         )
-        row = self._conn.execute(
-            "SELECT id FROM nodes WHERE qualified_name = ?", (qualified,)
-        ).fetchone()
+        stmt = self._get_stmt("SELECT id FROM nodes WHERE qualified_name = ?")
+        row = stmt.execute((qualified,)).fetchone()
         return row["id"]
 
     def upsert_edge(self, edge: EdgeInfo) -> int:
@@ -280,9 +288,8 @@ class GraphStore:
         if cached is not None and cached[0] == current_version:
             return cached[1]
 
-        row = self._conn.execute(
-            "SELECT * FROM nodes WHERE qualified_name = ?", (qualified_name,)
-        ).fetchone()
+        stmt = self._get_stmt("SELECT * FROM nodes WHERE qualified_name = ?")
+        row = stmt.execute((qualified_name,)).fetchone()
         result = self._row_to_node(row) if row else None
 
         with self._cache_lock:
@@ -297,9 +304,8 @@ class GraphStore:
         if cached is not None and cached[0] == current_version:
             return cached[1]
 
-        rows = self._conn.execute(
-            "SELECT * FROM nodes WHERE file_path = ?", (file_path,)
-        ).fetchall()
+        stmt = self._get_stmt("SELECT * FROM nodes WHERE file_path = ?")
+        rows = stmt.execute((file_path,)).fetchall()
         result = [self._row_to_node(r) for r in rows]
 
         with self._cache_lock:
@@ -309,9 +315,8 @@ class GraphStore:
         return result
 
     def get_edges_by_source(self, qualified_name: str) -> list[GraphEdge]:
-        rows = self._conn.execute(
-            "SELECT * FROM edges WHERE source_qualified = ?", (qualified_name,)
-        ).fetchall()
+        stmt = self._get_stmt("SELECT * FROM edges WHERE source_qualified = ?")
+        rows = stmt.execute((qualified_name,)).fetchall()
         return [self._row_to_edge(r) for r in rows]
 
     def get_edges_by_target(self, qualified_name: str) -> list[GraphEdge]:
@@ -466,6 +471,10 @@ class GraphStore:
 
     def get_stats(self) -> GraphStats:
         """Return aggregate statistics about the graph."""
+        current_version = self._cache_version
+        if self._stats_cache is not None and self._stats_cache[0] == current_version:
+            return self._stats_cache[1]
+
         total_nodes = self._conn.execute("SELECT COUNT(*) FROM nodes").fetchone()[0]
         total_edges = self._conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
 
@@ -489,7 +498,7 @@ class GraphStore:
 
         last_updated = self.get_metadata("last_updated")
 
-        return GraphStats(
+        result = GraphStats(
             total_nodes=total_nodes,
             total_edges=total_edges,
             nodes_by_kind=nodes_by_kind,
@@ -498,6 +507,8 @@ class GraphStore:
             files_count=files_count,
             last_updated=last_updated,
         )
+        self._stats_cache = (current_version, result)
+        return result
 
     def get_nodes_by_size(
         self,
