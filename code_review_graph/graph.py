@@ -17,6 +17,10 @@ from typing import Any, Optional
 
 import networkx as nx
 
+# Default cache size and TTL for query results
+DEFAULT_CACHE_SIZE = 1024
+DEFAULT_CACHE_TTL = 300  # 5 minutes
+
 from .migrations import get_schema_version, run_migrations
 from .parser import EdgeInfo, NodeInfo
 
@@ -139,6 +143,12 @@ class GraphStore:
         run_migrations(self._conn)
         self._nxg_cache: nx.DiGraph | None = None
         self._cache_lock = threading.Lock()
+        # Query result caches with version-based invalidation
+        self._cache_version = 0
+        self._node_cache: dict[str, tuple[int, GraphNode | None]] = {}
+        self._nodes_by_file_cache: dict[str, tuple[int, list[GraphNode]]] = {}
+        self._stats_cache: tuple[int, GraphStats | None] | None = None
+        self._max_cache_size = DEFAULT_CACHE_SIZE
 
     def __enter__(self) -> "GraphStore":
         return self
