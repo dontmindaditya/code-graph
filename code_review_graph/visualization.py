@@ -17,6 +17,19 @@ from .graph import GraphStore, edge_to_dict, node_to_dict
 logger = logging.getLogger(__name__)
 
 
+def escH(text: str) -> str:
+    """Escape HTML entities including quotes, backticks, and script closures."""
+    return (
+        str(text)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
+        .replace("`", "&#x60;")
+    )
+
+
 def _build_name_index(
     nodes: list[dict], seen_qn: set[str]
 ) -> dict[str, list[str]]:
@@ -167,8 +180,13 @@ def generate_html(store: GraphStore, output_path: str | Path) -> Path:
             "Consider filtering by file pattern.", stats.total_nodes,
         )
     data = export_graph_data(store)
-    # Escape </script> inside JSON to prevent premature tag closure (XSS defense)
-    data_json = json.dumps(data, default=str).replace("</", "<\\/")
+    # Escape script closures and comment injection patterns inside JSON (XSS defense)
+    data_json = (
+        json.dumps(data, default=str)
+        .replace("</", "<\\/")   # Prevent premature </script> closure
+        .replace("<!--", "<\\!--")  # Prevent comment injection
+        .replace("]]>", "]]\\>")   # Prevent CDATA-like injection
+    )
     html = _HTML_TEMPLATE.replace("__GRAPH_DATA__", data_json)
     output_path.write_text(html, encoding="utf-8")
     return output_path
