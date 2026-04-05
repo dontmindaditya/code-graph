@@ -52,12 +52,13 @@ class NodeInfo:
     return_type: Optional[str] = None
     modifiers: Optional[str] = None
     is_test: bool = False
+    is_async: bool = False  # True for async functions/methods
     extra: dict = field(default_factory=dict)
 
 
 @dataclass
 class EdgeInfo:
-    kind: str  # CALLS, IMPORTS_FROM, INHERITS, IMPLEMENTS, CONTAINS, TESTED_BY, DEPENDS_ON
+    kind: str  # CALLS, IMPORTS_FROM, INHERITS, IMPLEMENTS, CONTAINS, TESTED_BY, DEPENDS_ON, AWAITS
     source: str  # qualified name or path
     target: str  # qualified name or path
     file_path: str
