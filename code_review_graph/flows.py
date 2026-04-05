@@ -45,6 +45,16 @@ _ENTRY_NAME_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"^handle_"),
 ]
 
+# Name patterns for async entry points.
+_ASYNC_ENTRY_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"^async_main$"),
+    re.compile(r"^run$"),
+    re.compile(r"^start$"),
+    re.compile(r"^serve$"),
+    re.compile(r"^listen$"),
+    re.compile(r"^bootstrap$"),
+]
+
 
 # ---------------------------------------------------------------------------
 # Entry-point detection
@@ -73,13 +83,22 @@ def _matches_entry_name(node: GraphNode) -> bool:
     return False
 
 
+def _matches_async_entry_name(node: GraphNode) -> bool:
+    """Return True if *node*'s name matches an async entry-point pattern."""
+    for pat in _ASYNC_ENTRY_PATTERNS:
+        if pat.search(node.name):
+            return True
+    return False
+
+
 def detect_entry_points(store: GraphStore) -> list[GraphNode]:
     """Find functions that are entry points in the graph.
 
     An entry point is a Function/Test node that either:
     1. Has no incoming CALLS edges (true root), or
     2. Has a framework decorator (e.g. ``@app.get``), or
-    3. Matches a conventional name pattern (``main``, ``test_*``, etc.).
+    3. Matches a conventional name pattern (``main``, ``test_*``, etc.), or
+    4. Is an async function with a matching async entry pattern.
     """
     # Build a set of all qualified names that are CALLS targets.
     called_qnames = store.get_all_call_targets()
@@ -103,6 +122,10 @@ def detect_entry_points(store: GraphStore) -> list[GraphNode]:
 
         # Conventional name match.
         if _matches_entry_name(node):
+            is_entry = True
+
+        # Async function with async entry pattern match.
+        if node.extra.get("is_async") and _matches_async_entry_name(node):
             is_entry = True
 
         if is_entry and node.qualified_name not in seen_qn:
@@ -130,6 +153,8 @@ def trace_flows(store: GraphStore, max_depth: int = 15) -> list[dict]:
       - file_count: number of distinct files touched
       - files: list of distinct file paths
       - criticality: computed criticality score (0.0-1.0)
+      - is_async: whether the entry point is async
+      - async_call_count: number of async calls (await) in the flow
     """
     entry_points = detect_entry_points(store)
     flows: list[dict] = []
@@ -139,6 +164,7 @@ def trace_flows(store: GraphStore, max_depth: int = 15) -> list[dict]:
         path_qnames: list[str] = []
         visited: set[str] = set()
         queue: deque[tuple[str, int]] = deque()
+        async_call_count = 0
 
         # Seed with the entry point itself.
         queue.append((ep.qualified_name, 0))
@@ -158,8 +184,10 @@ def trace_flows(store: GraphStore, max_depth: int = 15) -> list[dict]:
             # Follow forward CALLS edges.
             edges = store.get_edges_by_source(current_qn)
             for edge in edges:
-                if edge.kind != "CALLS":
+                if edge.kind not in ("CALLS", "AWAITS"):
                     continue
+                if edge.kind == "AWAITS":
+                    async_call_count += 1
                 target_qn = edge.target_qualified
                 if target_qn in visited:
                     continue
@@ -192,6 +220,8 @@ def trace_flows(store: GraphStore, max_depth: int = 15) -> list[dict]:
             "file_count": len(files),
             "files": files,
             "criticality": 0.0,
+            "is_async": ep.extra.get("is_async", False),
+            "async_call_count": async_call_count,
         }
         flow["criticality"] = compute_criticality(flow, store)
         flows.append(flow)
