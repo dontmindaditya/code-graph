@@ -851,6 +851,14 @@ class CodeParser:
     _MAX_AST_DEPTH = 180  # Guard against pathologically nested source files
     _MAX_TEST_DESCRIPTION_LEN = 200  # Cap test description length in node names
 
+    def _is_async_function(self, node, language: str) -> bool:
+        """Return True if the function/method definition node is async."""
+        if language in ("python", "javascript", "typescript", "tsx"):
+            for child in node.children:
+                if child.type == "async":
+                    return True
+        return False
+
     def _get_test_description(self, call_node, source: bytes) -> Optional[str]:
         """Extract the first string argument from a test runner call node."""
         for child in call_node.children:
@@ -1546,6 +1554,7 @@ class CodeParser:
         qualified = self._qualify(name, file_path, enclosing_class)
         params = self._get_params(child, language, source)
         ret_type = self._get_return_type(child, language, source)
+        is_async = self._is_async_function(child, language)
 
         node = NodeInfo(
             kind=kind,
@@ -1558,6 +1567,7 @@ class CodeParser:
             params=params,
             return_type=ret_type,
             is_test=is_test,
+            is_async=is_async,
         )
         nodes.append(node)
 
