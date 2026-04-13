@@ -13,7 +13,7 @@ def run(repo_path: Path, store, config: dict) -> list[dict]:
     """Run build performance benchmark."""
     stats = store.get_stats()
 
-    # Time flow detection
+   
     try:
         from code_review_graph.flows import store_flows, trace_flows
         t0 = time.perf_counter()
