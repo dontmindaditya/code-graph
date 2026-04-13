@@ -15,9 +15,7 @@ from .graph import GraphEdge, GraphNode, GraphStore, _sanitize_name
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Optional igraph import
-# ---------------------------------------------------------------------------
+
 
 try:
     import igraph as ig  # type: ignore[import-untyped]
