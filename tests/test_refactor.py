@@ -28,6 +28,7 @@ class TestRenamePreview:
 
     def teardown_method(self):
         self.store.close()
+        self.tmp.close()
         Path(self.tmp.name).unlink(missing_ok=True)
         # Clean up pending refactors.
         with _refactor_lock:
@@ -115,6 +116,7 @@ class TestFindDeadCode:
 
     def teardown_method(self):
         self.store.close()
+        self.tmp.close()
         Path(self.tmp.name).unlink(missing_ok=True)
 
     def _seed(self):
@@ -202,6 +204,7 @@ class TestSuggestRefactorings:
 
     def teardown_method(self):
         self.store.close()
+        self.tmp.close()
         Path(self.tmp.name).unlink(missing_ok=True)
 
     def _seed(self):

@@ -22,6 +22,7 @@ class TestWiki:
 
     def teardown_method(self):
         self.store.close()
+        self.tmp.close()
         Path(self.tmp.name).unlink(missing_ok=True)
         # Clean up wiki dir
         wiki_path = Path(self.wiki_dir)

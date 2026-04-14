@@ -20,6 +20,7 @@ class TestMigrations:
 
     def teardown_method(self):
         self.store.close()
+        self.tmp.close()
         Path(self.tmp.name).unlink(missing_ok=True)
 
     def test_fresh_db_gets_latest_version(self):

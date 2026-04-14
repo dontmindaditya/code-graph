@@ -170,6 +170,8 @@ class GraphStore:
             self._stats_cache = None
 
     def close(self) -> None:
+        if self._conn.in_transaction:
+            self._conn.commit()
         self._conn.close()
 
     # --- Write operations ---
