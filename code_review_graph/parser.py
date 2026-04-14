@@ -324,9 +324,10 @@ class CodeParser:
         if language == "notebook":
             return self._parse_notebook(path, source)
 
-        # Databricks .py notebook exports
-        if language == "python" and source.startswith(
-            b"# Databricks notebook source\n",
+        # Databricks .py notebook exports (handle both Unix and Windows line endings)
+        if language == "python" and (
+            source.startswith(b"# Databricks notebook source\n") or
+            source.startswith(b"# Databricks notebook source\r\n")
         ):
             return self._parse_databricks_py_notebook(path, source)
 
@@ -715,7 +716,7 @@ class CodeParser:
         self, path: Path, source: bytes,
     ) -> tuple[list[NodeInfo], list[EdgeInfo]]:
         """Parse a Databricks .py notebook export."""
-        text = source.decode("utf-8", errors="replace")
+        text = source.decode("utf-8", errors="replace").replace("\r", "")
 
         # Strip the header line
         lines = text.split("\n")
