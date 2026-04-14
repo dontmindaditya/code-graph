@@ -21,6 +21,7 @@ class TestHybridSearch:
 
     def teardown_method(self):
         self.store.close()
+        self.tmp.close()
         Path(self.tmp.name).unlink(missing_ok=True)
 
     def _seed_data(self):

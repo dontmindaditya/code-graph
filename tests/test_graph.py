@@ -1,5 +1,6 @@
 """Tests for the graph storage and query engine."""
 
+import gc
 import tempfile
 from pathlib import Path
 
@@ -14,6 +15,8 @@ class TestGraphStore:
 
     def teardown_method(self):
         self.store.close()
+        self.tmp.close()
+        gc.collect()
         Path(self.tmp.name).unlink(missing_ok=True)
 
     def _make_file_node(self, path="/test/file.py"):
