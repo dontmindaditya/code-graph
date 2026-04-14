@@ -3,10 +3,20 @@
 from pathlib import Path
 
 import pytest
+import tree_sitter_language_pack as tslp
 
 from code_review_graph.parser import CodeParser
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(scope="class")
+def lua_available():
+    try:
+        tslp.get_parser("lua")
+        return True
+    except Exception:
+        return False
 
 
 class TestGoParsing:
@@ -688,6 +698,11 @@ class TestXSParsing:
 
 
 class TestLuaParsing:
+    @pytest.fixture(autouse=True)
+    def check_lua_available(self, lua_available):
+        if not lua_available:
+            pytest.skip("Lua grammar not available (blocked by Application Control policy)")
+
     def setup_method(self):
         self.parser = CodeParser()
         self.nodes, self.edges = self.parser.parse_file(FIXTURES / "sample.lua")
