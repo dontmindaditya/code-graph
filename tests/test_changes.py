@@ -399,6 +399,7 @@ class TestChanges:
 
         # Patch _get_store to use our test store,
         # and get_changed_files/get_staged_and_unstaged to return empty.
+        original_close = self.store.close
         with (
             patch("code_review_graph.tools.review._get_store") as mock_get_store,
             patch("code_review_graph.tools.review.get_changed_files", return_value=[]),
@@ -414,6 +415,8 @@ class TestChanges:
             assert result["risk_score"] == 0.0
             assert result["changed_functions"] == []
             assert result["test_gaps"] == []
+        # Restore close method for teardown
+        self.store.close = original_close
 
     def test_detect_changes_tool_with_changes(self):
         """detect_changes_func returns full analysis for changed files."""
@@ -421,6 +424,7 @@ class TestChanges:
 
         self._add_func("my_func", path="/fake/repo/app.py", line_start=1, line_end=10)
 
+        original_close = self.store.close
         with (
             patch("code_review_graph.tools.review._get_store") as mock_get_store,
             patch("code_review_graph.tools.review.get_changed_files", return_value=["app.py"]),
@@ -438,3 +442,5 @@ class TestChanges:
             assert "risk_score" in result
             assert "test_gaps" in result
             assert "review_priorities" in result
+        # Restore close method for teardown
+        self.store.close = original_close
