@@ -1050,6 +1050,52 @@ class GraphStore:
             return []
         return sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
+    def find_bridges(self) -> list[tuple[str, str]]:
+        """Find all bridges (edges whose removal disconnects the graph).
+        
+        A bridge is an edge whose removal increases the number of connected
+        components. In a directed graph, this operates on the underlying
+        undirected graph.
+        
+        Returns:
+            List of (source, target) tuples representing bridge edges.
+        """
+        g = self._build_networkx_graph()
+        try:
+            undirected = g.to_undirected()
+            return list(nx.bridges(undirected))
+        except Exception:
+            return []
+
+    def find_articulation_points(self) -> list[str]:
+        """Find all articulation points (nodes whose removal disconnects the graph).
+        
+        Returns:
+            List of qualified names that are articulation points.
+        """
+        g = self._build_networkx_graph()
+        try:
+            undirected = g.to_undirected()
+            return list(nx.articulation_points(undirected))
+        except Exception:
+            return []
+
+    def get_edge_bridge_score(self) -> dict[tuple[str, str], float]:
+        """Compute bridge scores for all edges using edge_betweenness_centrality.
+        
+        Higher scores indicate edges that are more likely to be bridges.
+        
+        Returns:
+            Dict mapping (source, target) to bridge likelihood score.
+        """
+        g = self._build_networkx_graph()
+        try:
+            undirected = g.to_undirected()
+            ebc = nx.edge_betweenness_centrality(undirected)
+            return ebc
+        except Exception:
+            return {}
+
     def _make_qualified(self, node: NodeInfo) -> str:
         if node.kind == "File":
             return node.file_path
